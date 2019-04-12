@@ -1,9 +1,13 @@
 /*
  * Net.cpp
  *
- *  Created on: Mar 13, 2019
+ *  Created on: Apr 12, 2019
  *      Author: oliv
  */
+
+#include "Net.h"
+
+namespace net {
 
 #include "Net.h"
 #include "math.h"
@@ -12,8 +16,8 @@ using namespace std;
 using namespace arma;
 
 
-Net::Net(const std::vector<int> & layers, std::vector<double (*)(const double&)> fs)
-:layers(layers),fs(fs)
+Net::Net(const std::vector<int> & layers, std::vector<double (*)(const double&)> fs,const int & nthreads)
+:layers(layers),fs(fs),nthreads(nthreads)
 {
 	int n_coeffs{0};
 	int n_nodes{0};
@@ -30,18 +34,7 @@ Net::Net(const std::vector<int> & layers, std::vector<double (*)(const double&)>
 			n_nodes += temp;
 		}
 	}
-//	coeffs = vec(n_coeffs, fill::randn);
-////	cout << coeffs(0)<<endl;
-//	temp = 0;
-//	for (vector<int>::const_iterator it = layers.begin(); it != layers.end(); ++it) {
-//		if (it == layers.begin()) {
-//		}
-//		else {
-//			coeffs.rows(temp, temp + *it * *(it - 1) - 1) *= sqrt(2./ *(it - 1));
-////			cout << 1/ *(it - 1) << endl;
-//			temp += *it * *(it - 1);
-//		}
-//	}
+
 	coeffs = vec(n_coeffs, fill::zeros);
 	mt19937 g;
 	std::normal_distribution<double> d;
@@ -158,3 +151,5 @@ Net::~Net() {
 	// TODO Auto-generated destructor stub
 }
 
+
+} /* namespace net */
