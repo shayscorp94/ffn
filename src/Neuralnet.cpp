@@ -28,7 +28,7 @@ int main(){
 
 	const int nassets{487};
 	const int nlines{756};
-	const double end_train{10};
+	const double end_train{11};
 	dataframe Data{756,nassets,"cleanIndex.csv"};
 	mat Train = Data.getData().rows(0,end_train+0);
 
@@ -39,7 +39,7 @@ int main(){
 
 	vector<int> layers{487,250,125,1};
 
-	Net N(layers,fs,ds,1);
+	Net N(layers,fs,ds,2,2);
 
 	for(int d = 0 ; d != end_train+1-10 ; ++d){
 	//		For each available date, we calculate a gradient and then we average

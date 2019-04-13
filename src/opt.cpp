@@ -48,9 +48,10 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps){
 	const int maxIt{1000};
 	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
 	vector<Net> Gs((*N).getNthreads(), Net( (*N).L(),(*N).getDs(),(*N).getDs(),1 ) );
+	vec g((*N).getNcoeffs(),fill::zeros);
 
 
-	mat g = gradient(N,&Gs);
+	gradient(N,&Gs,&g);
 	cout << norm(g)<<"\n";
 
 
@@ -61,7 +62,7 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps){
 		}
 		else{
 			(*N).get_coeffs() -= eth*g;
-			g = gradient(N,&Gs);
+			gradient(N,&Gs,&g);
 
 		}
 	}
@@ -82,9 +83,9 @@ void opt::partial_grad(arma::vec * res, Net * N,std::vector<Net> * Gs,const int 
 	}
 }
 
-arma::mat opt::gradient( Net * N,std::vector<Net> * Gs){
+void opt::gradient( Net * N,std::vector<Net> * Gs,arma::vec * res_grad){
 //	cout << "opt::gradient"<<endl;
-	vec res_grad((*N).getNcoeffs(),fill::zeros);
+	(*res_grad).fill(0.);
 	const int nsamples =(*N).getNsamples();
 	int n_threads = (*N).getNthreads();
 	n_threads = (n_threads>nsamples) ?nsamples:n_threads; /* prevent from having more threads than samples */
@@ -96,16 +97,50 @@ arma::mat opt::gradient( Net * N,std::vector<Net> * Gs){
 		for(int t = 0 ; t != n_threads-1 ; ++t){
 			start = end;
 			end += size;
-			trds[t] = thread{partial_grad,&res_grad,N,Gs,start,end,t};
+			trds[t] = thread{partial_grad,res_grad,N,Gs,start,end,t};
 		}
 			start = end;
 			end  = nsamples;
-			trds[n_threads-1] = thread{partial_grad,&res_grad,N,Gs,start,end,n_threads-1};
+			trds[n_threads-1] = thread{partial_grad,res_grad,N,Gs,start,end,n_threads-1};
 
 		for(int t= 0 ; t != n_threads ; ++t){
 			trds[t].join();
 		}
-	return res_grad/nsamples;
+	*res_grad /=nsamples;
+};
+
+void opt::partial_err(double * res, Net * N,const int start,const int end,const int thread ){
+	const int nlayers = (*N).L().size();
+	for(int sample = start; sample != end ; ++sample){
+		(*N).update(sample);
+		*res += pow ( (*N).n(sample,nlayers-1,0) - (*N).getTarget(sample), 2  );
+	}
+}
+
+double opt::err(Net * N){
+//	cout << "opt::gradient"<<endl;
+	const int nsamples =(*N).getNsamples();
+	int n_threads = (*N).getNthreads();
+	n_threads = (n_threads>nsamples) ?nsamples:n_threads; /* prevent from having more threads than samples */
+	vector<thread> trds(n_threads);
+	int start = 0;
+	int end = 0;
+	int size = nsamples/n_threads;
+	double res=0;
+
+		for(int t = 0 ; t != n_threads-1 ; ++t){
+			start = end;
+			end += size;
+			trds[t] = thread{partial_err,&res,N,start,end,t};
+		}
+			start = end;
+			end  = nsamples;
+			trds[n_threads-1] = thread{partial_err,&res,N,start,end,n_threads-1};
+
+		for(int t= 0 ; t != n_threads ; ++t){
+			trds[t].join();
+		}
+	return res /=nsamples;
 };
 
 

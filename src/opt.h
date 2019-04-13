@@ -51,8 +51,11 @@ static arma::vec grad_descent(Net * N, const double & etha,const double & eps);
 
 static void partial_grad(arma::vec * res, Net * N,std::vector<Net> * Gs,const int start,const int end,const int thread );
 
-static arma::mat gradient( Net * N,std::vector<Net> * Gs);
+static void gradient( Net * N,std::vector<Net> * Gs,arma::vec * res_grad);
 
+static void partial_err(double * res, Net * N,const int start,const int end,const int thread );
+
+static double err( Net * N); /* Updates N before computing the error : useful for linear search */
 ///static void update_partial(Net * N, const int l,const int start,const int end);
 //
 //static void update(Net * N);

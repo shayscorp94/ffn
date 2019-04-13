@@ -42,10 +42,10 @@ public:
 		return ds;
 	}
 
-	const int getNthreads() const {
+	int getNthreads() const {
 		return nthreads;
 	}
-	const double getTarget(const int & sample) const{
+	double getTarget(const int & sample) const{
 		return targets(sample);
 	}
 	double& setTarget(const int & sample){
