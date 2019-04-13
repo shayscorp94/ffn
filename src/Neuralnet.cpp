@@ -50,11 +50,13 @@ int main(){
 		}
 		N.update(d);
 	}
-	cout << N.v(0,3,0);
 
 
 
 	opt::grad_descent(&N,1e-8,0.01);
+
+	cout << N.v(0,3,0);
+
 
 
 	return 0;

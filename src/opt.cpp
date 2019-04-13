@@ -22,23 +22,21 @@ void opt::grad(const Net & N,const int sample,Net & G,const double & target){
 	const vector<double (*)(const double &)> deriv=G.getFs();
 //	Deal with end node if net is not empty
 	if(n_layers > 0){
-//		cout << N.n(n_layers-1,0) << endl;
-		G.v(1,n_layers-1,0) = 2*deriv[n_layers-1](N.n(sample,n_layers-1,0))*( N.v(sample,n_layers-1,0)  -target);
-//		cout <<deriv[n_layers-1](N.n(n_layers-1,0))<<endl;
+		G.v(0,n_layers-1,0) = 2*deriv[n_layers-1](N.n(sample,n_layers-1,0))*( N.v(sample,n_layers-1,0)  -target);
 	}
 
 	for(int l = n_layers-2 ; l != -1 ; --l){
 //		Coeffs of G store partial diff with respect to that coeff
 		for(int start = 0 ; start != layers[l] ; ++start){
 			for(int end = 0; end != layers[l+1]; ++end){
-				G.c(l,start,end) = N.v(sample,l,start)*G.v(1,l+1,end);
+				G.c(l,start,end) = N.v(sample,l,start)*G.v(0,l+1,end);
 			}
 		}
 //		Nodes of G store partial diff with respect to that node value
 		for(int start = 0 ; start != layers[l] ; ++start){
-			G.v(1,l,start) = 0;
+			G.v(0,l,start) = 0;
 			for(int end = 0; end != layers[l+1]; ++end){
-				G.v(1,l,start) += N.c(l,start,end)*deriv[l](N.n(sample,l,start))*G.v(1,l+1,end);
+				G.v(0,l,start) += N.c(l,start,end)*deriv[l](N.n(sample,l,start))*G.v(0,l+1,end);
 			}
 		}
 	}
@@ -47,11 +45,14 @@ void opt::grad(const Net & N,const int sample,Net & G,const double & target){
 arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps){
 //	cout << "opt::grad_descent"<<endl;
 	double eth = etha;
-	const int maxIt{100};
-	vector<Net> Gs((*N).getNthreads(), Net((*N).L(),(*N).getFs(),1) );
+	const int maxIt{1000};
+	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
+	vector<Net> Gs((*N).getNthreads(), Net((*N).L(),ds,1) );
 
 
 	mat g = gradient(N,&Gs);
+	cout << norm(g)<<"\n";
+
 
 	for(int i = 0 ; i != maxIt ; ++i ){
 		if(norm(g) < eps){
@@ -61,7 +62,6 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps){
 		else{
 			(*N).get_coeffs() -= eth*g;
 			g = gradient(N,&Gs);
-			cout << norm(g)<<"\n";
 
 		}
 	}
