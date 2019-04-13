@@ -26,10 +26,17 @@ using namespace net;
 
 int main(){
 
+	const int nassets{487};
+	const int nlines{756};
+	const double end_train{11};
+	dataframe Data{756,nassets,"cleanIndex.csv"};
+	mat Train = Data.getData().rows(0,end_train+0);
 
 
-	vector<double (*)(const double &)> fs{opt::I,opt::Lrelu,opt::Lrelu};
-	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu};
+	vector<double (*)(const double &)> fs{opt::I,opt::Lrelu,opt::Lrelu,opt::Lrelu};
+	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
+
+
 	vector<int> layers{4,2,1};
 
 	Net N(layers,fs,1);
