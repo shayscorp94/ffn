@@ -41,14 +41,14 @@ void opt::grad(const Net & N,const int sample,Net & G,const int thread,const dou
 	}
 }
 
-void opt::grad_descent(Net & N, arma::mat (& grad) (const Net *,Net *), const double & etha,const double & eps){
+void opt::grad_descent(Net & N, arma::mat (& grad) (const Net *,vector<Net> *), const double & etha,const double & eps){
 	double eth = etha;
 	const int maxIt{1000};
 	const int nthreads;
-	Net G(N.L(),N.getFs(),N.getNthreads());
+	vector<Net> Gs(N.getNthreads(), Net(N.L(),N.getFs(),1) );
 
 
-	mat g = grad(N,G);
+	mat g = grad(N,Gs);
 
 	for(int i = 0 ; i != maxIt ; ++i ){
 		if(norm(g) < eps){
@@ -57,7 +57,7 @@ void opt::grad_descent(Net & N, arma::mat (& grad) (const Net *,Net *), const do
 		}
 		else{
 			N.get_coeffs() -= eth*g;
-			g = grad(N,G);
+			g = grad(N,Gs);
 
 		}
 	}
@@ -65,23 +65,29 @@ void opt::grad_descent(Net & N, arma::mat (& grad) (const Net *,Net *), const do
 //	return v;
 }
 
-
-
-void opt::update_partial(Net* N, const int l, const int min_node, const int max_node ) {
-	const vector<int> layers = (*N).L();
-	const std::vector<double (*)(const double&)> fs = (*N).getFs();
-
-	for(int end = min_node ; end != max_node ; ++end){
-		(*N).n(l,end) = 0;
-		for(int start = 0 ; start != layers[l-1] ; ++start){
-			(*N).n(l,end) += (*N).c(l-1,start,end)*(*N).v(l-1,start);
-		}
-//		cout <<end<<endl;
-
-		(*N).v(l,end) = fs[l]((*N).n(l,end)); /* function of layer */
+inline void partial_grad(arma::vec * res,const Net * N,Net * G,const int start,const int end,const int thread ){
+	for(int sample = start; sample != end ; ++sample){
+		(*N).update(sample);
+		opt::grad(*N,sample,*G,thread,(*N).target(sample));
+		*res += (*G).get_coeffs();
 	}
-
 }
+
+//void opt::update_partial(Net* N, const int l, const int min_node, const int max_node ) {
+//	const vector<int> layers = (*N).L();
+//	const std::vector<double (*)(const double&)> fs = (*N).getFs();
+//
+//	for(int end = min_node ; end != max_node ; ++end){
+//		(*N).n(l,end) = 0;
+//		for(int start = 0 ; start != layers[l-1] ; ++start){
+//			(*N).n(l,end) += (*N).c(l-1,start,end)*(*N).v(l-1,start);
+//		}
+////		cout <<end<<endl;
+//
+//		(*N).v(l,end) = fs[l]((*N).n(l,end)); /* function of layer */
+//	}
+//
+//}
 //
 //void opt::update(Net* N) {
 //	const int nThreads = (*N).getNthreads();

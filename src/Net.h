@@ -41,6 +41,9 @@ public:
 	const int getNthreads() const {
 		return nthreads;
 	}
+	const double target(const int & sample) const{
+		return target(sample);
+	}
 
 private:
 const int nsamples;
