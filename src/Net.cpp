@@ -16,8 +16,8 @@ using namespace std;
 using namespace arma;
 
 
-Net::Net(const std::vector<int> & layers, std::vector<double (*)(const double&)> fs,const int & nsamples,const int & nthreads)
-:layers(layers),fs(fs),nsamples(nsamples),nthreads(nthreads)
+Net::Net(const std::vector<int> & layers, std::vector<double (*)(const double&)> fs,std::vector<double (*)(const double&)> ds,const int & nsamples,const int & nthreads)
+:layers(layers),fs(fs),ds(ds),nsamples(nsamples),nthreads(nthreads)
 {
 	int n_coeffs{0};
 	int n_nodes{0};

@@ -47,7 +47,7 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps){
 	double eth = etha;
 	const int maxIt{1000};
 	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
-	vector<Net> Gs((*N).getNthreads(), Net((*N).L(),ds,1) );
+	vector<Net> Gs((*N).getNthreads(), Net( (*N).L(),(*N).getDs(),(*N).getDs(),1 ) );
 
 
 	mat g = gradient(N,&Gs);
@@ -107,6 +107,9 @@ arma::mat opt::gradient( Net * N,std::vector<Net> * Gs){
 		}
 	return res_grad/nsamples;
 };
+
+
+
 
 //void opt::update_partial(Net* N, const int l, const int min_node, const int max_node ) {
 //	const vector<int> layers = (*N).L();
