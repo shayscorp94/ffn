@@ -44,9 +44,9 @@ static double Dsm(const double & t){
 		return (t>100)?1:exp(t)/(1+exp(t));
 	}
 
-static void grad(const Net & N,Net & G,const double & target);
+static void grad(const Net & N,const int sample,Net & G,const int thread,const double & target);
 
-static arma::mat grad_descent(const arma::mat & v0, arma::mat (& grad) (const arma::mat *), const double & etha,const double & eps);
+static void grad_descent(Net & N, arma::mat (& grad) (const Net *,Net *), const double & etha,const double & eps);
 
 inline arma::mat g(const arma::mat * v);
 
