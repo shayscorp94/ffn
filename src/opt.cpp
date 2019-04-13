@@ -7,12 +7,15 @@
 
 #include "opt.h"
 #include <thread>
+
 using namespace std;
 using namespace arma;
 
 namespace net {
 
-void opt::grad(const Net & N,const int sample,Net & G,const int thread,const double & target){
+void opt::grad(const Net & N,const int sample,Net & G,const double & target){
+//	cout << "opt::grad" << endl;
+
 
 	const vector<int> & layers = N.L();
 	const int n_layers = layers.size();
@@ -20,7 +23,7 @@ void opt::grad(const Net & N,const int sample,Net & G,const int thread,const dou
 //	Deal with end node if net is not empty
 	if(n_layers > 0){
 //		cout << N.n(n_layers-1,0) << endl;
-		G.v(thread,n_layers-1,0) = 2*deriv[n_layers-1](N.n(sample,n_layers-1,0))*( N.v(sample,n_layers-1,0)  -target);
+		G.v(1,n_layers-1,0) = 2*deriv[n_layers-1](N.n(sample,n_layers-1,0))*( N.v(sample,n_layers-1,0)  -target);
 //		cout <<deriv[n_layers-1](N.n(n_layers-1,0))<<endl;
 	}
 
@@ -28,50 +31,82 @@ void opt::grad(const Net & N,const int sample,Net & G,const int thread,const dou
 //		Coeffs of G store partial diff with respect to that coeff
 		for(int start = 0 ; start != layers[l] ; ++start){
 			for(int end = 0; end != layers[l+1]; ++end){
-				G.c(l,start,end) = N.v(sample,l,start)*G.v(thread,l+1,end);
+				G.c(l,start,end) = N.v(sample,l,start)*G.v(1,l+1,end);
 			}
 		}
 //		Nodes of G store partial diff with respect to that node value
 		for(int start = 0 ; start != layers[l] ; ++start){
-			G.v(thread,l,start) = 0;
+			G.v(1,l,start) = 0;
 			for(int end = 0; end != layers[l+1]; ++end){
-				G.v(thread,l,start) += N.c(l,start,end)*deriv[l](N.n(sample,l,start))*G.v(thread,l+1,end);
+				G.v(1,l,start) += N.c(l,start,end)*deriv[l](N.n(sample,l,start))*G.v(1,l+1,end);
 			}
 		}
 	}
 }
 
-void opt::grad_descent(Net & N, arma::mat (& grad) (const Net *,vector<Net> *), const double & etha,const double & eps){
+arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps){
+//	cout << "opt::grad_descent"<<endl;
 	double eth = etha;
-	const int maxIt{1000};
-	const int nthreads;
-	vector<Net> Gs(N.getNthreads(), Net(N.L(),N.getFs(),1) );
+	const int maxIt{100};
+	vector<Net> Gs((*N).getNthreads(), Net((*N).L(),(*N).getFs(),1) );
 
 
-	mat g = grad(N,Gs);
+	mat g = gradient(N,&Gs);
 
 	for(int i = 0 ; i != maxIt ; ++i ){
 		if(norm(g) < eps){
 			cout << "numit" << i <<' ' << norm(g) <<'\n';
-//			return v;
+			return (*N).get_coeffs();
 		}
 		else{
-			N.get_coeffs() -= eth*g;
-			g = grad(N,Gs);
+			(*N).get_coeffs() -= eth*g;
+			g = gradient(N,&Gs);
 
 		}
 	}
 	cout << "reached max it" << norm(g) << '\n';
-//	return v;
+	return (*N).get_coeffs();
 }
 
-inline void partial_grad(arma::vec * res,const Net * N,Net * G,const int start,const int end,const int thread ){
+void opt::partial_grad(arma::vec * res, Net * N,std::vector<Net> * Gs,const int start,const int end,const int thread ){
+//	cout << "opt::partial_grad"<< start << " "<< end << " "<< thread<<endl;
+
 	for(int sample = start; sample != end ; ++sample){
 		(*N).update(sample);
-		opt::grad(*N,sample,*G,thread,(*N).target(sample));
-		*res += (*G).get_coeffs();
+
+		grad(*N,sample,(*Gs)[thread],(*N).getTarget(sample));
+		cout << 1 << endl;
+
+
+		*res += (*Gs)[thread].get_coeffs();
 	}
 }
+
+arma::mat opt::gradient( Net * N,std::vector<Net> * Gs){
+//	cout << "opt::gradient"<<endl;
+	vec res_grad((*N).getNcoeffs(),fill::zeros);
+	const int nsamples =(*N).getNsamples();
+	int n_threads = (*N).getNthreads();
+	n_threads = (n_threads>nsamples) ?nsamples:n_threads; /* prevent from having more threads than samples */
+	vector<thread> trds(n_threads);
+	int start = 0;
+	int end = 0;
+	int size = nsamples/n_threads;
+
+		for(int t = 0 ; t != n_threads-1 ; ++t){
+			start = end;
+			end += size;
+			trds[t] = thread{partial_grad,&res_grad,N,Gs,start,end,t};
+		}
+			start = end;
+			end  = nsamples;
+			trds[n_threads-1] = thread{partial_grad,&res_grad,N,Gs,start,end,n_threads-1};
+
+		for(int t= 0 ; t != n_threads ; ++t){
+			trds[t].join();
+		}
+	return res_grad/nsamples;
+};
 
 //void opt::update_partial(Net* N, const int l, const int min_node, const int max_node ) {
 //	const vector<int> layers = (*N).L();

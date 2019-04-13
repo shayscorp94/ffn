@@ -32,10 +32,10 @@ int main(){
 	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu};
 	vector<int> layers{4,2,1};
 
-	Net N(layers,fs,2);
-	Net G(layers,fs,2);
+	Net N(layers,fs,1);
 
-	opt::grad(N,0,G,0,3.);
+
+	opt::grad_descent(&N,0.01,0.01);
 
 
 	return 0;

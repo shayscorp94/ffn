@@ -53,7 +53,7 @@ Net::Net(const std::vector<int> & layers, std::vector<double (*)(const double&)>
 
 	nodevals = vector<arma::vec>(nsamples,vec(n_nodes,fill::zeros));
 	nodes = vector<arma::vec>(nsamples,vec(n_nodes,fill::zeros));
-
+	targets = vec(nsamples,fill::zeros);
 }
 
 double& Net::c(const int& layer_num, const int& start, const int& end) {

@@ -41,9 +41,11 @@ public:
 	const int getNthreads() const {
 		return nthreads;
 	}
-	const double target(const int & sample) const{
-		return target(sample);
+	const double getTarget(const int & sample) const{
+		return targets(sample);
 	}
+	const double getNsamples() const { return nsamples;};
+	const double getNcoeffs() const {return coeffs.n_rows; }
 
 private:
 const int nsamples;
