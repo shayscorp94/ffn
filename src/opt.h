@@ -46,7 +46,9 @@ static double Dsm(const double & t){
 
 static void grad(const Net & N,Net & G,const double & target);
 
-static arma::mat grad_descent(const arma::mat & v0, arma::mat (& grad) (const arma::mat &), const double & etha,const double & eps);
+static arma::mat grad_descent(const arma::mat & v0, arma::mat (& grad) (const arma::mat *), const double & etha,const double & eps);
+
+inline arma::mat g(const arma::mat * v);
 
 static void update_partial(Net * N, const int l,const int start,const int end);
 

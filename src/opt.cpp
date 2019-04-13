@@ -41,13 +41,11 @@ void opt::grad(const Net & N,Net & G,const double & target){
 	}
 }
 
-arma::mat opt::grad_descent(const arma::mat & v0, arma::mat (& grad) (const arma::mat &), const double & etha,const double & eps){
+arma::mat opt::grad_descent(const arma::mat & v0, arma::mat (& grad) (const arma::mat *), const double & etha,const double & eps){
 	mat v{v0};
-	mat g = grad(v);
-//	double old_n = norm(g);
+	mat g = grad(&v);
 	double eth = etha;
-//	double temp = old_n;
-	const int maxIt{300};
+	const int maxIt{1000};
 	for(int i = 0 ; i != maxIt ; ++i ){
 		if(norm(g) < eps){
 			cout << "numit" << i <<' ' << norm(g) <<'\n';
@@ -55,13 +53,15 @@ arma::mat opt::grad_descent(const arma::mat & v0, arma::mat (& grad) (const arma
 		}
 		else{
 			v = v-eth*g;
-			g = grad(v);
-//			cout << "grad" << norm(g) << endl;
+			g = grad(&v);
+
 		}
 	}
 	cout << "reached max it" << norm(g) << '\n';
 	return v;
 }
+
+
 
 void opt::update_partial(Net* N, const int l, const int min_node, const int max_node ) {
 	const vector<int> layers = (*N).L();
@@ -72,7 +72,7 @@ void opt::update_partial(Net* N, const int l, const int min_node, const int max_
 		for(int start = 0 ; start != layers[l-1] ; ++start){
 			(*N).n(l,end) += (*N).c(l-1,start,end)*(*N).v(l-1,start);
 		}
-		cout <<2<<endl;
+//		cout <<end<<endl;
 
 		(*N).v(l,end) = fs[l]((*N).n(l,end)); /* function of layer */
 	}
@@ -81,8 +81,7 @@ void opt::update_partial(Net* N, const int l, const int min_node, const int max_
 
 void opt::update(Net* N) {
 	const int nThreads = (*N).getNthreads();
-	vector<std::thread> trds;
-	trds.reserve(nThreads);
+//	cout << nThreads<<'\n';
 	const vector<int> layers = (*N).L();
 	const std::vector<double (*)(const double&)> fs = (*N).getFs();
 
@@ -94,7 +93,11 @@ void opt::update(Net* N) {
 	}
 
 
-	for(int l = 1 ; l != layers.size() ; l++){
+	for(int l = 1 ; l != layers.size()-1 ; l++){
+		vector<std::thread> trds;
+		trds.reserve(nThreads);
+
+
 		int size = layers[l]/nThreads;
 		int min_node = 0;
 		int max_node = 0;
@@ -102,16 +105,21 @@ void opt::update(Net* N) {
 		for(int i = 0 ; i != nThreads-1 ; ++i){
 			min_node = max_node;
 			max_node += size;
-			trds[i] = thread{update_partial, N,  l,  min_node,  max_node };
+			trds.push_back(thread{update_partial, N,  l,  min_node,  max_node });
+//			cout << "yo";
+//			update_partial(N,  l,  min_node,  max_node );
+
 		}
 
 		min_node = max_node;
 		max_node = layers[l];
-		cout <<1<<endl;
+//		cout <<1<<endl;
+//		cout << l <<' '<< min_node<<' ' << max_node<<' ' <<endl;
 
-		trds[nThreads-1] = thread{update_partial, N,  l,  min_node,  max_node };
-
+		trds.push_back(thread{update_partial, N,  l,  min_node,  max_node });
+//		update_partial( N,  l,  min_node,  max_node );
 		for(int i = 0 ; i != nThreads ; ++i){
+//			cout << "joinable"<< trds[i].joinable() <<' ';
 			trds[i].join();
 		}
 
