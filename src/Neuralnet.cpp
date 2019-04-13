@@ -28,7 +28,7 @@ int main(){
 
 	const int nassets{487};
 	const int nlines{756};
-	const double end_train{11};
+	const double end_train{10};
 	dataframe Data{756,nassets,"cleanIndex.csv"};
 	mat Train = Data.getData().rows(0,end_train+0);
 
@@ -41,9 +41,20 @@ int main(){
 
 	Net N(layers,fs,1);
 
+	for(int d = 0 ; d != end_train+1-10 ; ++d){
+	//		For each available date, we calculate a gradient and then we average
+		N.n(d,0,0) = 0;
+		N.setTarget(d) = Train(d+10,0);
+		for(int s = 1 /* do not use the current index price*/ ; s != nassets ; ++s){
+			N.n(d,0,s) = Train(d,s);
+		}
+		N.update(d);
+	}
+	cout << N.v(0,3,0);
 
 
-	opt::grad_descent(&N,0.01,0.01);
+
+	opt::grad_descent(&N,1e-8,0.01);
 
 
 	return 0;

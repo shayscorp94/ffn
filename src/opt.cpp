@@ -61,6 +61,7 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps){
 		else{
 			(*N).get_coeffs() -= eth*g;
 			g = gradient(N,&Gs);
+			cout << norm(g)<<"\n";
 
 		}
 	}
@@ -75,7 +76,6 @@ void opt::partial_grad(arma::vec * res, Net * N,std::vector<Net> * Gs,const int 
 		(*N).update(sample);
 
 		grad(*N,sample,(*Gs)[thread],(*N).getTarget(sample));
-		cout << 1 << endl;
 
 
 		*res += (*Gs)[thread].get_coeffs();

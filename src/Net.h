@@ -44,6 +44,9 @@ public:
 	const double getTarget(const int & sample) const{
 		return targets(sample);
 	}
+	double& setTarget(const int & sample){
+		return targets(sample);
+	}
 	const double getNsamples() const { return nsamples;};
 	const double getNcoeffs() const {return coeffs.n_rows; }
 
