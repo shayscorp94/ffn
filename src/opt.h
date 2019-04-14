@@ -50,9 +50,9 @@ static void grad(const Net & N,const int sample,Net & G,const double & target);
 
 static arma::vec grad_descent(Net * N, const double & etha,const double & eps, bool linSearch = true);
 
-static void partial_grad(arma::vec * res, Net * N,std::vector<Net> * Gs,const int start,const int end,const int thread );
+static void partial_grad(arma::mat * thread_grads, Net * N,std::vector<Net> * Gs,const int start,const int end,const int thread );
 
-static void gradient( Net * N,std::vector<Net> * Gs,arma::vec * res_grad);
+static void gradient( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,arma::mat * thread_grads);
 
 static void partial_err(double * res, Net * N,const int start,const int end,const int thread );
 
@@ -60,7 +60,7 @@ static double err( Net * N); /* Updates N before computing the error : useful fo
 
 static void result( Net * N);
 
-static arma::vec stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize=1, bool linSearch = true);
+static arma::vec stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize=1, bool linSearch = true,const int & nepochs =100);
 
 static void gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,const arma::vec * ,const int batchStart,const int batchEnd);
 

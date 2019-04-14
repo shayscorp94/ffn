@@ -29,7 +29,7 @@ int main(){
 
 	const int nassets{487};
 	const int nlines{756};
-	const double end_train{100};
+	const double end_train{11};
 	dataframe Data{756,nassets,"cleanIndex.csv"};
 	mat Train = Data.getData().rows(0,end_train+0);
 
@@ -53,20 +53,18 @@ int main(){
 
 	}
 
-	cout << N.v(0,3,0)<<' ';
-
-	N.HeInit();
-	N.update(0);
-
-	cout << N.v(0,3,0)<<' ';
 
 
 
-//	opt::stochastic_descent(&N,1e-8,0.01,2);
-
-
-
+	opt::grad_descent(&N,1e-8,0.01);
+//	cout <<stats;
+//
+//
 	opt::result(&N);
+
+	cout << opt::err(&N);
+	cout << opt::err(&N);
+
 
 
 

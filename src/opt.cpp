@@ -51,7 +51,15 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps, boo
 	double eth = etha;
 	const int maxIt{100};
 	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
-	vector<Net> Gs((*N).getNthreads(), Net( (*N).L(),(*N).getDs(),(*N).getDs(),1 ) );
+
+//	For threads
+	const int nsamples =(*N).getNsamples();
+	int n_threads = (*N).getNthreads();
+	n_threads = (n_threads>nsamples) ?nsamples:n_threads; /* prevent from having more threads than samples */
+
+	vector<Net> Gs(n_threads, Net( (*N).L(),(*N).getDs(),(*N).getDs(),1 ) );
+	mat thread_grads((*N).getNcoeffs(),n_threads,fill::zeros);
+
 	vec g((*N).getNcoeffs(),fill::zeros);
 
 //	time measurement
@@ -67,7 +75,7 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps, boo
 	const double minlr = 1e-9;
 //
 
-	gradient(N,&Gs,&g);
+	gradient(N,&Gs,&g,&thread_grads);
 //	cout << norm(g)<<'\n';
 
 
@@ -101,7 +109,7 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps, boo
 			}
 
 			(*N).get_coeffs() -= eth*g;
-			gradient(N,&Gs,&g);
+			gradient(N,&Gs,&g,&thread_grads);
 //			cout << norm(g)<<'\n';
 
 		}
@@ -112,7 +120,7 @@ arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps, boo
 	return (*N).get_coeffs();
 }
 
-void opt::partial_grad(arma::vec * res, Net * N,std::vector<Net> * Gs,const int start,const int end,const int thread ){
+void opt::partial_grad(arma::mat * thread_grads, Net * N,std::vector<Net> * Gs,const int start,const int end,const int thread ){
 //	cout << "opt::partial_grad"<< start << " "<< end << " "<< thread<<endl;
 
 	for(int sample = start; sample != end ; ++sample){
@@ -121,17 +129,17 @@ void opt::partial_grad(arma::vec * res, Net * N,std::vector<Net> * Gs,const int 
 		grad(*N,sample,(*Gs)[thread],(*N).getTarget(sample));
 
 
-		*res += (*Gs)[thread].get_coeffs();
+		(*thread_grads).col(thread) += (*Gs)[thread].get_coeffs();
 	}
 }
 
-void opt::gradient( Net * N,std::vector<Net> * Gs,arma::vec * res_grad){
+void opt::gradient( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,arma::mat * thread_grads){
 //	cout << "opt::gradient"<<endl;
-	(*res_grad).fill(0.);
+
 	const int nsamples =(*N).getNsamples();
-	int n_threads = (*N).getNthreads();
-	n_threads = (n_threads>nsamples) ?nsamples:n_threads; /* prevent from having more threads than samples */
+	int n_threads = (*thread_grads).n_cols;
 	vector<thread> trds(n_threads);
+	(*thread_grads).fill(0.);
 	int start = 0;
 	int end = 0;
 	int size = nsamples/n_threads;
@@ -139,16 +147,16 @@ void opt::gradient( Net * N,std::vector<Net> * Gs,arma::vec * res_grad){
 		for(int t = 0 ; t != n_threads-1 ; ++t){
 			start = end;
 			end += size;
-			trds[t] = thread{partial_grad,res_grad,N,Gs,start,end,t};
+			trds[t] = thread{partial_grad,thread_grads,N,Gs,start,end,t};
 		}
 			start = end;
 			end  = nsamples;
-			trds[n_threads-1] = thread{partial_grad,res_grad,N,Gs,start,end,n_threads-1};
+			trds[n_threads-1] = thread{partial_grad,thread_grads,N,Gs,start,end,n_threads-1};
 
 		for(int t= 0 ; t != n_threads ; ++t){
 			trds[t].join();
 		}
-	*res_grad /=nsamples;
+	*res_grad = sum(*thread_grads,1)/nsamples; /* One column per thread*/
 };
 
 void opt::partial_err(double * res, Net * N,const int start,const int end,const int thread ){
@@ -168,21 +176,21 @@ double opt::err(Net * N){
 	int start = 0;
 	int end = 0;
 	int size = nsamples/n_threads;
-	double res=0;
+	vec res(n_threads,fill::zeros);
 
 		for(int t = 0 ; t != n_threads-1 ; ++t){
 			start = end;
 			end += size;
-			trds[t] = thread{partial_err,&res,N,start,end,t};
+			trds[t] = thread{partial_err,&(res(t)),N,start,end,t};
 		}
 			start = end;
 			end  = nsamples;
-			trds[n_threads-1] = thread{partial_err,&res,N,start,end,n_threads-1};
+			trds[n_threads-1] = thread{partial_err,&(res(n_threads-1)),N,start,end,n_threads-1};
 
 		for(int t= 0 ; t != n_threads ; ++t){
 			trds[t].join();
 		}
-	return res /=nsamples;
+	return mean(res);
 };
 
 void opt::result( Net* N) {
@@ -195,10 +203,10 @@ void opt::result( Net* N) {
 		cout <<"\nerror "<< err(N);
 }
 
-arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize, bool linSearch){
+arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize, bool linSearch,const int & nepochs){
 //	cout << "opt::grad_descent"<<endl;
 	double eth = etha;
-	const int maxIt{100};
+	const int maxIt{nepochs};
 
 	const int nsamples = (*N).getNsamples();
 	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
@@ -276,8 +284,12 @@ arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & ep
 		if(norm(g) < eps){
 				finish = std::chrono::high_resolution_clock::now();
 				elapsed = finish - start;
-				cout << "numit" << i <<' '<< norm(g) <<" time"<<elapsed.count()<<'\n';
-				return (*N).get_coeffs();
+				vec stats(3);
+				stats(0) = elapsed.count();
+				stats(1) = norm(g);
+				stats(2) = err(N);
+				cout << "numit" << i <<" time"<<stats(0)<<"norm"<< stats(1) <<"err"<<stats(2)<<'\n';
+				return stats;
 			}
 		if(linSearch){
 		lmin = 0;
@@ -307,48 +319,13 @@ arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & ep
 	}
 	finish = std::chrono::high_resolution_clock::now();
 	elapsed = finish - start;
-	cout << "reached max it" << norm(g) <<" time"<<elapsed.count()<<'\n';
-	return (*N).get_coeffs();
+	vec stats(3);
+	stats(0) = elapsed.count();
+	stats(1) = norm(g);
+	stats(2) = err(N);
+	cout << "maxEpochs" << maxIt <<" time"<<stats(0)<<"norm"<< stats(1) <<"err"<<stats(2)<<'\n';
+	return stats;
 }
-//
-//	for(int i = 0 ; i != maxIt ; ++i ){
-//		if(norm(g) < eps){
-//			finish = std::chrono::high_resolution_clock::now();
-//			elapsed = finish - start;
-//			cout << "numit" << i <<' '<< norm(g) <<" time"<<elapsed.count()<<'\n';
-//			return (*N).get_coeffs();
-//		}
-//		else{
-//			if(linSearch){
-//			lmin = 0;
-//			min = -1 ;
-//			lin = 0.1;
-//			for(int j = 0 ; j != 3 ; ++j){
-//				(*N).get_coeffs() -= eth*lin*g;
-//				error = err_st(N,&gen);
-//				(*N).get_coeffs() += eth*lin*g;
-//
-//
-//				if( min == -1 or min > error){
-//					min = error;
-//					lmin = lin;
-//				}
-//				lin *= 10;
-//			}
-//			eth = lmin*eth;
-////			If eth becomes too small we keep and and stop doing linear searches.
-//			linSearch = (eth > minlr)?true:false;
-//			}
-//
-//			(*N).get_coeffs() -= eth*g;
-//			gradient_st(N,&Gs,&g,gen);
-//
-//		}
-//	}
-//	finish = std::chrono::high_resolution_clock::now();
-//	elapsed = finish - start;
-//	cout << "reached max it" << norm(g) <<" time"<<elapsed.count()<<'\n';
-
 
 void opt::gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,const vec * sigma,const int batchStart,const int batchEnd){
 //	cout << "opt::gradient"<<endl;
