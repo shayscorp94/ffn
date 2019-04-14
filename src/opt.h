@@ -62,9 +62,9 @@ static void result( Net * N);
 
 static arma::vec stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize=1, bool linSearch = true,const int & nepochs =100);
 
-static void gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,const arma::vec * ,const int batchStart,const int batchEnd);
+static void gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,arma::mat * thread_grads,const arma::vec * ,const int batchStart,const int batchEnd);
 
-static void partial_grad_st(arma::vec * res, Net * N,std::vector<Net> * Gs,const arma::vec * sigma,const int start,const int end,const int thread );
+static void partial_grad_st(arma::mat * thread_grads, Net * N,std::vector<Net> * Gs,const arma::vec * sigma,const int start,const int end,const int thread );
 
 static double err_st(Net * N,const arma::vec * sigma,const int batchStart,const int batchEnd);
 

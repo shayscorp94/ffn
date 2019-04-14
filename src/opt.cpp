@@ -210,7 +210,15 @@ arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & ep
 
 	const int nsamples = (*N).getNsamples();
 	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
-	vector<Net> Gs((*N).getNthreads(), Net( (*N).L(),(*N).getDs(),(*N).getDs(),1 ) );
+
+//	for threads
+	int n_threads = (*N).getNthreads();
+	n_threads = (n_threads>batchSize) ?batchSize:n_threads; /* prevent from having more threads than samples */
+
+	vector<Net> Gs(n_threads, Net( (*N).L(),(*N).getDs(),(*N).getDs(),1 ) );
+
+	mat thread_grads((*N).getNcoeffs(),n_threads,fill::zeros);
+
 	vec g((*N).getNcoeffs(),fill::zeros);
 
 
@@ -248,7 +256,7 @@ arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & ep
 			batchStart = batchEnd;
 			batchEnd += batchSize;
 
-			gradient_st(N,&Gs,&g,&sigma,batchStart,batchEnd);
+			gradient_st(N,&Gs,&g,&thread_grads,&sigma,batchStart,batchEnd);
 
 			if(linSearch){
 			lmin = 0;
@@ -278,7 +286,7 @@ arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & ep
 		batchStart = batchEnd;
 		batchEnd = nsamples;
 
-		gradient_st(N,&Gs,&g,&sigma,batchStart,batchEnd);
+		gradient_st(N,&Gs,&g,&thread_grads,&sigma,batchStart,batchEnd);
 //		cout << norm(g)<<'\n';
 
 		if(norm(g) < eps){
@@ -327,12 +335,14 @@ arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & ep
 	return stats;
 }
 
-void opt::gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,const vec * sigma,const int batchStart,const int batchEnd){
+void opt::gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,arma::mat * thread_grads,const vec * sigma,const int batchStart,const int batchEnd){
 //	cout << "opt::gradient"<<endl;
-	(*res_grad).fill(0.);
 	const int nsamples =batchEnd-batchStart;
-	int n_threads = (*N).getNthreads();
+	int n_threads = (*thread_grads).n_cols;
 	n_threads = (n_threads>nsamples) ?nsamples:n_threads; /* prevent from having more threads than samples */
+
+	(*thread_grads).fill(0.);
+
 	vector<thread> trds(n_threads);
 	int start = batchStart;
 	int end = batchStart;
@@ -341,28 +351,28 @@ void opt::gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,const 
 		for(int t = 0 ; t != n_threads-1 ; ++t){
 			start = end;
 			end += size;
-			trds[t] = thread{partial_grad_st,res_grad,N,Gs,sigma,start,end,t};
+			trds[t] = thread{partial_grad_st,thread_grads,N,Gs,sigma,start,end,t};
 		}
 			start = end;
 			end  = batchEnd;
 
-			trds[n_threads-1] = thread{partial_grad_st,res_grad,N,Gs,sigma,start,end,n_threads-1};
+			trds[n_threads-1] = thread{partial_grad_st,thread_grads,N,Gs,sigma,start,end,n_threads-1};
 
 		for(int t= 0 ; t != n_threads ; ++t){
 			trds[t].join();
 		}
-	*res_grad /=nsamples;
+	*res_grad = sum(*thread_grads,1)/nsamples; /* One column per thread*/
 };
 
 
-void opt::partial_grad_st(arma::vec * res, Net * N,std::vector<Net> * Gs,const vec * sigma,const int start,const int end,const int thread ){
+void opt::partial_grad_st(arma::mat * thread_grads, Net * N,std::vector<Net> * Gs,const vec * sigma,const int start,const int end,const int thread ){
 //	cout << "opt::partial_grad"<< start << " "<< end << " "<< thread<<endl;
 
 	for(int sample = start; sample != end ; ++sample){
 		(*N).update((*sigma)(sample));
 		grad(*N,(*sigma)(sample),(*Gs)[thread],(*N).getTarget((*sigma)(sample)));
 
-		*res += (*Gs)[thread].get_coeffs();
+		(*thread_grads).col(thread) += (*Gs)[thread].get_coeffs();
 	}
 }
 
@@ -375,21 +385,21 @@ double opt::err_st(Net * N,const arma::vec * sigma,const int batchStart,const in
 	int start = batchStart;
 	int end = batchStart;
 	int size = nsamples/n_threads;
-	double res=0;
+	vec res(n_threads,fill::zeros);
 
 		for(int t = 0 ; t != n_threads-1 ; ++t){
 			start = end;
 			end += size;
-			trds[t] = thread{partial_err_st,&res,N,sigma,start,end,t};
+			trds[t] = thread{partial_err_st,&(res(t)),N,sigma,start,end,t};
 		}
 			start = end;
 			end  =batchEnd;
-			trds[n_threads-1] = thread{partial_err_st,&res,N,sigma,start,end,n_threads-1};
+			trds[n_threads-1] = thread{partial_err_st,&(res(n_threads-1)),N,sigma,start,end,n_threads-1};
 
 		for(int t= 0 ; t != n_threads ; ++t){
 			trds[t].join();
 		}
-	return res /=nsamples;
+	return mean(res);
 };
 
 void opt::partial_err_st(double * res, Net * N,const arma::vec * sigma,const int start,const int end,const int thread ){
