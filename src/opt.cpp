@@ -287,7 +287,7 @@ arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & ep
 		batchEnd = nsamples;
 
 		gradient_st(N,&Gs,&g,&thread_grads,&sigma,batchStart,batchEnd);
-		cout << norm(g)<<'\n';
+//		cout << norm(g)<<'\n';
 
 		if(norm(g) < eps){
 				finish = std::chrono::high_resolution_clock::now();
@@ -322,7 +322,7 @@ arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & ep
 		}
 		(*N).get_coeffs() -= eth*g;
 
-		cout << norm(g)<<'\n';
+//		cout << norm(g)<<'\n';
 
 	}
 	finish = std::chrono::high_resolution_clock::now();
