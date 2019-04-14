@@ -8,7 +8,9 @@
 
 #include <iostream>
 #include <armadillo>
-#include <algorithm>    // std::random_shuffle
+#include <algorithm> // std::random_shuffle
+#include <ctime>        // std::time
+#include <cstdlib>      // std::rand, std::srand
 #include <random>
 #include <thread>
 
@@ -23,12 +25,11 @@ using namespace vSpace;
 using namespace net;
 
 
-
 int main(){
 
 	const int nassets{487};
 	const int nlines{756};
-	const double end_train{11};
+	const double end_train{100};
 	dataframe Data{756,nassets,"cleanIndex.csv"};
 	mat Train = Data.getData().rows(0,end_train+0);
 
@@ -39,7 +40,7 @@ int main(){
 
 	vector<int> layers{487,250,125,1};
 
-	Net N(layers,fs,ds,2,2);
+	Net N(layers,fs,ds,end_train-9,2);
 
 	for(int d = 0 ; d != end_train+1-10 ; ++d){
 	//		For each available date, we calculate a gradient and then we average
@@ -49,21 +50,26 @@ int main(){
 			N.n(d,0,s) = Train(d,s);
 		}
 		N.update(d);
-		cout << 1 <<endl;
 
 	}
 
+	cout << N.v(0,3,0)<<' ';
+
+	N.HeInit();
+	N.update(0);
+
+	cout << N.v(0,3,0)<<' ';
 
 
-	auto start = std::chrono::high_resolution_clock::now();
 
-	opt::grad_descent(&N,1e-8,0.01);
+//	opt::stochastic_descent(&N,1e-8,0.01,2);
 
 
-	auto finish = std::chrono::high_resolution_clock::now();
-	std::chrono::duration<double> elapsed = finish - start;
 
-	cout << N.v(0,3,0)<<' '<<elapsed.count();
+	opt::result(&N);
+
+
+
 
 
 

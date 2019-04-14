@@ -16,7 +16,7 @@ using namespace std;
 using namespace arma;
 
 
-Net::Net(const std::vector<int> & layers, std::vector<double (*)(const double&)> fs,std::vector<double (*)(const double&)> ds,const int & nsamples,const int & nthreads)
+Net::Net(const std::vector<int> & layers, std::vector<double (*)(const double&)> fs,std::vector<double (*)(const double&)> ds,const int & nsamples,const int & nthreads,const int & batchSize)
 :layers(layers),fs(fs),ds(ds),nsamples(nsamples),nthreads(nthreads)
 {
 	int n_coeffs{0};
@@ -148,5 +148,22 @@ Net::~Net() {
 	// TODO Auto-generated destructor stub
 }
 
+void Net::HeInit() {
+	mt19937 g;
+	std::normal_distribution<double> d;
+
+	int temp = 0;
+	for (vector<int>::const_iterator it = layers.begin(); it != layers.end(); ++it) {
+		if (it == layers.begin()) {
+		}
+		else {
+			for(int i = temp ; i != temp + *it * *(it - 1) ;++i ){
+			coeffs(i) = d(g)*sqrt(2./ *(it - 1));
+			}
+			temp += *it * *(it - 1);
+		}
+	}
+
+}
 
 } /* namespace net */

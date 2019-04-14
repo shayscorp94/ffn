@@ -10,6 +10,8 @@
 
 #include "math.h"
 #include "Net.h"
+#include <algorithm> // std::random_shuffle
+
 
 
 namespace net {
@@ -46,8 +48,7 @@ static double Dsm(const double & t){
 
 static void grad(const Net & N,const int sample,Net & G,const double & target);
 
-static arma::vec grad_descent(Net * N, const double & etha,const double & eps);
-
+static arma::vec grad_descent(Net * N, const double & etha,const double & eps, bool linSearch = true);
 
 static void partial_grad(arma::vec * res, Net * N,std::vector<Net> * Gs,const int start,const int end,const int thread );
 
@@ -56,6 +57,19 @@ static void gradient( Net * N,std::vector<Net> * Gs,arma::vec * res_grad);
 static void partial_err(double * res, Net * N,const int start,const int end,const int thread );
 
 static double err( Net * N); /* Updates N before computing the error : useful for linear search */
+
+static void result( Net * N);
+
+static arma::vec stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize=1, bool linSearch = true);
+
+static void gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,const arma::vec * ,const int batchStart,const int batchEnd);
+
+static void partial_grad_st(arma::vec * res, Net * N,std::vector<Net> * Gs,const arma::vec * sigma,const int start,const int end,const int thread );
+
+static double err_st(Net * N,const arma::vec * sigma,const int batchStart,const int batchEnd);
+
+static void partial_err_st(double * res, Net * N,const arma::vec * sigma,const int start,const int end,const int thread );
+
 ///static void update_partial(Net * N, const int l,const int start,const int end);
 //
 //static void update(Net * N);
@@ -64,6 +78,7 @@ static double err( Net * N); /* Updates N before computing the error : useful fo
 private:
 	opt();
 	virtual ~opt();
+
 };
 
 } /* namespace net */

@@ -10,12 +10,13 @@
 
 #include <vector>
 #include <armadillo>
+#include <random>
 
 namespace net {
 
 class Net {
 public:
-	Net(const std::vector<int> & layers, std::vector<double (*)(const double &)> fs,std::vector<double (*)(const double &)> ds,const int & n_samples,const int & nthreads = 1 ); /* input a vector with the sizes of the layers, starting with the largest layer : l1 , l2 , lk */
+	Net(const std::vector<int> & layers, std::vector<double (*)(const double &)> fs,std::vector<double (*)(const double &)> ds,const int & n_samples,const int & nthreads = 1,const int & batchSize =1); /* input a vector with the sizes of the layers, starting with the largest layer : l1 , l2 , lk */
 	double & c(const int & layer, const int & start, const int & end); /* gives access to a coefficient, starting from the layer given as input, enables it to be modified ,DOES NOT UPDATE THE NODE VALUES  */
 	double c(const int & layer, const int & start, const int & end)const; /* gives access to a coefficient, starting from the layer given as input, cannot be modified  */
 	double & v(const int & sample,const int & layer, const int & i); /* gives access to a the f(node value) from the layer given as input, enables it to be modified, DOES NOT UPDATE THE NODE VALUES */
@@ -54,6 +55,13 @@ public:
 	const double getNsamples() const { return nsamples;};
 	const double getNcoeffs() const {return coeffs.n_rows; }
 
+	std::vector<arma::vec>& getNodevals(){ return nodevals;}
+	std::vector<arma::vec>& getNodes(){ return nodes;}
+
+	void HeInit();
+
+
+
 private:
 const int nsamples;
 const int nthreads;
@@ -64,6 +72,10 @@ arma::vec targets;
 std::vector<int> layers;
 std::vector<double (*)(const double &)> fs;
 std::vector<double (*)(const double &)> ds;
+
+// for the stochastic gradient descent :
+
+
 
 
 

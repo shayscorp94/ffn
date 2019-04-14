@@ -7,6 +7,10 @@
 
 #include "opt.h"
 #include <thread>
+#include <random>
+#include <algorithm> // std::random_shuffle
+
+
 
 using namespace std;
 using namespace arma;
@@ -42,31 +46,69 @@ void opt::grad(const Net & N,const int sample,Net & G,const double & target){
 	}
 }
 
-arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps){
+arma::vec opt::grad_descent(Net * N, const double & etha,const double & eps, bool linSearch){
 //	cout << "opt::grad_descent"<<endl;
 	double eth = etha;
-	const int maxIt{1000};
+	const int maxIt{100};
 	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
 	vector<Net> Gs((*N).getNthreads(), Net( (*N).L(),(*N).getDs(),(*N).getDs(),1 ) );
 	vec g((*N).getNcoeffs(),fill::zeros);
 
+//	time measurement
+	auto start = std::chrono::high_resolution_clock::now();
+	auto finish = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed;
+
+//	for linsearch
+	double lmin = 0;
+	double min = -1 ;
+	double lin = 0.1;
+	double error = 0;
+	const double minlr = 1e-9;
+//
 
 	gradient(N,&Gs,&g);
-	cout << norm(g)<<"\n";
+//	cout << norm(g)<<'\n';
 
 
 	for(int i = 0 ; i != maxIt ; ++i ){
 		if(norm(g) < eps){
-			cout << "numit" << i <<' ' << norm(g) <<'\n';
+			finish = std::chrono::high_resolution_clock::now();
+			elapsed = finish - start;
+			cout << "numit" << i <<' '<< norm(g) <<" time"<<elapsed.count()<<'\n';
 			return (*N).get_coeffs();
 		}
 		else{
+			if(linSearch){
+			lmin = 0;
+			min = -1 ;
+			lin = 0.1;
+			for(int j = 0 ; j != 3 ; ++j){
+				(*N).get_coeffs() -= eth*lin*g;
+				error = err(N);
+				(*N).get_coeffs() += eth*lin*g;
+
+
+				if( min == -1 or min > error){
+					min = error;
+					lmin = lin;
+				}
+				lin *= 10;
+			}
+			eth = lmin*eth;
+//			If eth becomes too small we keep and and stop doing linear searches.
+			linSearch = (eth > minlr)?true:false;
+			}
+
 			(*N).get_coeffs() -= eth*g;
 			gradient(N,&Gs,&g);
+//			cout << norm(g)<<'\n';
 
 		}
 	}
-	cout << "reached max it" << norm(g) << '\n';
+	finish = std::chrono::high_resolution_clock::now();
+	elapsed = finish - start;
+	cout << "reached max it" << norm(g) <<" time"<<elapsed.count()<<'\n';
 	return (*N).get_coeffs();
 }
 
@@ -143,70 +185,274 @@ double opt::err(Net * N){
 	return res /=nsamples;
 };
 
+void opt::result( Net* N) {
+	const int nsamples =(*N).getNsamples();
+	const int nlayers =(*N).L().size();
+		cout <<"prediction      target\n";
+	for(int sample = 0 ; sample != nsamples ; ++sample){
+		cout << (*N).n(sample,nlayers-1,0) << "         " <<(*N).getTarget(sample)<<'\n';
+	}
+		cout <<"\nerror "<< err(N);
+}
+
+arma::vec opt::stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize, bool linSearch){
+//	cout << "opt::grad_descent"<<endl;
+	double eth = etha;
+	const int maxIt{100};
+
+	const int nsamples = (*N).getNsamples();
+	vector<double (*)(const double &)> ds{opt::One,opt::DLrelu,opt::DLrelu,opt::DLrelu};
+	vector<Net> Gs((*N).getNthreads(), Net( (*N).L(),(*N).getDs(),(*N).getDs(),1 ) );
+	vec g((*N).getNcoeffs(),fill::zeros);
+
+
+//	time measurement
+	auto start = std::chrono::high_resolution_clock::now();
+	auto finish = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed;
+
+//	for linsearch
+	double lmin = 0;
+	double min = -1 ;
+	double lin = 0.1;
+	double error = 0;
+	const double minlr = 1e-9;
 
 
 
-//void opt::update_partial(Net* N, const int l, const int min_node, const int max_node ) {
-//	const vector<int> layers = (*N).L();
-//	const std::vector<double (*)(const double&)> fs = (*N).getFs();
+	int batchStart = 0;
+	int batchEnd = 0;
+
+//	permutations
+	vec sigma(nsamples);
+
+	for(int i = 0; i != nsamples ; ++i){
+		sigma(i) = i;
+	}
+
+
+	for(int i = 0; i != maxIt ; ++i){
+		sigma = shuffle(sigma);
+
+		batchStart = 0;
+		batchEnd = 0;
+		for(int j = 0 ; j != nsamples/batchSize-1 ; ++j){
+			batchStart = batchEnd;
+			batchEnd += batchSize;
+
+			gradient_st(N,&Gs,&g,&sigma,batchStart,batchEnd);
+
+			if(linSearch){
+			lmin = 0;
+			min = -1 ;
+			lin = 0.1;
+			for(int j = 0 ; j != 3 ; ++j){
+				(*N).get_coeffs() -= eth*lin*g;
+				error = err_st(N,&sigma,batchStart,batchEnd);
+				(*N).get_coeffs() += eth*lin*g;
+
+
+				if( min == -1 or min > error){
+					min = error;
+					lmin = lin;
+				}
+				lin *= 10;
+			}
+			eth = lmin*eth;
+	//			If eth becomes too small we keep and and stop doing linear searches.
+			linSearch = (eth > minlr)?true:false;
+			}
+//			cout << i<<endl;
+
+			(*N).get_coeffs() -= eth*g;
+
+		}
+		batchStart = batchEnd;
+		batchEnd = nsamples;
+
+		gradient_st(N,&Gs,&g,&sigma,batchStart,batchEnd);
+//		cout << norm(g)<<'\n';
+
+		if(norm(g) < eps){
+				finish = std::chrono::high_resolution_clock::now();
+				elapsed = finish - start;
+				cout << "numit" << i <<' '<< norm(g) <<" time"<<elapsed.count()<<'\n';
+				return (*N).get_coeffs();
+			}
+		if(linSearch){
+		lmin = 0;
+		min = -1 ;
+		lin = 0.1;
+		for(int j = 0 ; j != 3 ; ++j){
+			(*N).get_coeffs() -= eth*lin*g;
+			error = err_st(N,&sigma,batchStart,batchEnd);
+			(*N).get_coeffs() += eth*lin*g;
+
+
+			if( min == -1 or min > error){
+				min = error;
+				lmin = lin;
+			}
+			lin *= 10;
+		}
+		eth = lmin*eth;
+
+//			If eth becomes too small we keep and and stop doing linear searches.
+		linSearch = (eth > minlr)?true:false;
+		}
+		(*N).get_coeffs() -= eth*g;
+
+//		cout << norm(g)<<'\n';
+
+	}
+	finish = std::chrono::high_resolution_clock::now();
+	elapsed = finish - start;
+	cout << "reached max it" << norm(g) <<" time"<<elapsed.count()<<'\n';
+	return (*N).get_coeffs();
+}
 //
-//	for(int end = min_node ; end != max_node ; ++end){
-//		(*N).n(l,end) = 0;
-//		for(int start = 0 ; start != layers[l-1] ; ++start){
-//			(*N).n(l,end) += (*N).c(l-1,start,end)*(*N).v(l-1,start);
+//	for(int i = 0 ; i != maxIt ; ++i ){
+//		if(norm(g) < eps){
+//			finish = std::chrono::high_resolution_clock::now();
+//			elapsed = finish - start;
+//			cout << "numit" << i <<' '<< norm(g) <<" time"<<elapsed.count()<<'\n';
+//			return (*N).get_coeffs();
 //		}
-////		cout <<end<<endl;
+//		else{
+//			if(linSearch){
+//			lmin = 0;
+//			min = -1 ;
+//			lin = 0.1;
+//			for(int j = 0 ; j != 3 ; ++j){
+//				(*N).get_coeffs() -= eth*lin*g;
+//				error = err_st(N,&gen);
+//				(*N).get_coeffs() += eth*lin*g;
 //
-//		(*N).v(l,end) = fs[l]((*N).n(l,end)); /* function of layer */
+//
+//				if( min == -1 or min > error){
+//					min = error;
+//					lmin = lin;
+//				}
+//				lin *= 10;
+//			}
+//			eth = lmin*eth;
+////			If eth becomes too small we keep and and stop doing linear searches.
+//			linSearch = (eth > minlr)?true:false;
+//			}
+//
+//			(*N).get_coeffs() -= eth*g;
+//			gradient_st(N,&Gs,&g,gen);
+//
+//		}
 //	}
+//	finish = std::chrono::high_resolution_clock::now();
+//	elapsed = finish - start;
+//	cout << "reached max it" << norm(g) <<" time"<<elapsed.count()<<'\n';
+
+
+void opt::gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,const vec * sigma,const int batchStart,const int batchEnd){
+//	cout << "opt::gradient"<<endl;
+	(*res_grad).fill(0.);
+	const int nsamples =batchEnd-batchStart;
+	int n_threads = (*N).getNthreads();
+	n_threads = (n_threads>nsamples) ?nsamples:n_threads; /* prevent from having more threads than samples */
+	vector<thread> trds(n_threads);
+	int start = batchStart;
+	int end = batchStart;
+	int size = nsamples/n_threads;
+
+		for(int t = 0 ; t != n_threads-1 ; ++t){
+			start = end;
+			end += size;
+			trds[t] = thread{partial_grad_st,res_grad,N,Gs,sigma,start,end,t};
+		}
+			start = end;
+			end  = batchEnd;
+
+			trds[n_threads-1] = thread{partial_grad_st,res_grad,N,Gs,sigma,start,end,n_threads-1};
+
+		for(int t= 0 ; t != n_threads ; ++t){
+			trds[t].join();
+		}
+	*res_grad /=nsamples;
+};
+
+
+void opt::partial_grad_st(arma::vec * res, Net * N,std::vector<Net> * Gs,const vec * sigma,const int start,const int end,const int thread ){
+//	cout << "opt::partial_grad"<< start << " "<< end << " "<< thread<<endl;
+
+	for(int sample = start; sample != end ; ++sample){
+		(*N).update((*sigma)(sample));
+		grad(*N,(*sigma)(sample),(*Gs)[thread],(*N).getTarget((*sigma)(sample)));
+
+		*res += (*Gs)[thread].get_coeffs();
+	}
+}
+
+double opt::err_st(Net * N,const arma::vec * sigma,const int batchStart,const int batchEnd){
+//	cout << "opt::gradient"<<endl;
+	const int nsamples =batchEnd-batchStart;
+	int n_threads = (*N).getNthreads();
+	n_threads = (n_threads>nsamples) ?nsamples:n_threads; /* prevent from having more threads than samples */
+	vector<thread> trds(n_threads);
+	int start = batchStart;
+	int end = batchStart;
+	int size = nsamples/n_threads;
+	double res=0;
+
+		for(int t = 0 ; t != n_threads-1 ; ++t){
+			start = end;
+			end += size;
+			trds[t] = thread{partial_err_st,&res,N,sigma,start,end,t};
+		}
+			start = end;
+			end  =batchEnd;
+			trds[n_threads-1] = thread{partial_err_st,&res,N,sigma,start,end,n_threads-1};
+
+		for(int t= 0 ; t != n_threads ; ++t){
+			trds[t].join();
+		}
+	return res /=nsamples;
+};
+
+void opt::partial_err_st(double * res, Net * N,const arma::vec * sigma,const int start,const int end,const int thread ){
+	const int nlayers = (*N).L().size();
+	for(int sample = start; sample != end ; ++sample){
+		(*N).update((*sigma)(sample));
+		*res += pow ( (*N).n((*sigma)(sample),nlayers-1,0) - (*N).getTarget((*sigma)(sample)), 2  );
+	}
+}
+
+
+
 //
-//}
+//double opt::err_st(Net * N,mt19937 * gen,const int batchSize){
+////	cout << "opt::gradient"<<endl;
+//	int n_threads = (*N).getNthreads();
+//	n_threads = (n_threads>batchSize) ?batchSize:n_threads; /* prevent from having more threads than samples */
+//	vector<thread> trds(n_threads);
+//	int start = 0;
+//	int end = 0;
+//	int size = batchSize/n_threads;
+//	double res=0;
 //
-//void opt::update(Net* N) {
-//	const int nThreads = (*N).getNthreads();
-////	cout << nThreads<<'\n';
-//	const vector<int> layers = (*N).L();
-//	const std::vector<double (*)(const double&)> fs = (*N).getFs();
-//
-//	if(layers.size() >0){
-//		for(int end = 0 ; end != layers[0] ; ++end){
-//			(*N).v(0,end) = fs[0]((*N).n(0,end)); /* function of layer */
-////		cout << n(0,end)<<endl;
+//		for(int t = 0 ; t != n_threads-1 ; ++t){
+//			start = end;
+//			end += size;
+//			trds[t] = thread{partial_err_st,&res,N,gen,start,end,t};
 //		}
-//	}
+//			start = end;
+//			end  = batchSize;
+//			trds[n_threads-1] = thread{partial_err_st,&res,N,gen,start,end,n_threads-1};
 //
-//
-//	for(int l = 1 ; l != layers.size()-1 ; l++){
-//		vector<std::thread> trds;
-//		trds.reserve(nThreads);
-//
-//
-//		int size = layers[l]/nThreads;
-//		int min_node = 0;
-//		int max_node = 0;
-//
-//		for(int i = 0 ; i != nThreads-1 ; ++i){
-//			min_node = max_node;
-//			max_node += size;
-//			trds.push_back(thread{update_partial, N,  l,  min_node,  max_node });
-////			cout << "yo";
-////			update_partial(N,  l,  min_node,  max_node );
-//
+//		for(int t= 0 ; t != n_threads ; ++t){
+//			trds[t].join();
 //		}
-//
-//		min_node = max_node;
-//		max_node = layers[l];
-////		cout <<1<<endl;
-////		cout << l <<' '<< min_node<<' ' << max_node<<' ' <<endl;
-//
-//		trds.push_back(thread{update_partial, N,  l,  min_node,  max_node });
-////		update_partial( N,  l,  min_node,  max_node );
-//		for(int i = 0 ; i != nThreads ; ++i){
-////			cout << "joinable"<< trds[i].joinable() <<' ';
-//			trds[i].join();
-//		}
-//
-//	}
-//}
+//	return res /=batchSize;
+//};
+
+
+
+
 
 } /* namespace net */
