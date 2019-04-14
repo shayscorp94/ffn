@@ -26,10 +26,10 @@ using namespace net;
 
 
 int main(){
-
+//  Data processing
 	const int nassets{487};
 	const int nlines{756};
-	const double end_train{100};
+	const double end_train{11};
 	dataframe Data{756,nassets,"cleanIndex.csv"};
 	mat Train = Data.getData().rows(0,end_train+0);
 
@@ -39,31 +39,25 @@ int main(){
 
 
 	vector<int> layers{487,250,125,1};
+//	Net has only one vector of coefficients but several vecotrs of nodes values so that for
+//	each sample we have a Network
+ 	Net N(layers,fs,ds,/* number of samples : */end_train-9,/*number of threads : */2);
 
-	Net N(layers,fs,ds,end_train-9,2);
-
+//	Network initialization
 	for(int d = 0 ; d != end_train+1-10 ; ++d){
 	//		For each available date, we calculate a gradient and then we average
-		N.n(d,0,0) = 0;
-		N.setTarget(d) = Train(d+10,0);
-		for(int s = 1 /* do not use the current index price*/ ; s != nassets ; ++s){
+		N.n(d,0,0) = 0; /* N.n(sample,layer,node) */
+		N.setTarget(d) = Train(d+10,0); /* target corresponding do the d th sample*/
+		for(int s = 1 ; s != nassets ; ++s){
 			N.n(d,0,s) = Train(d,s);
 		}
-		N.update(d);
+		N.update(d); /* update for the network corresponding to sample d */
 
 	}
 
+	vec stats = opt::stochastic_descent(&N,/*learning rate*/1e-8,/*stoping condition*/0.01,/* batch size*/2,/*linear search enabled*/true,/*number of epochs*/10);
 
-
-
-	opt::stochastic_descent(&N,1e-8,0.01,2);
-//	cout <<stats;
-//
-//
 	opt::result(&N);
-//
-//	cout << opt::err(&N);
-//	cout << opt::err(&N);
 
 
 
