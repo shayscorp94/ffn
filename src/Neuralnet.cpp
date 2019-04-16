@@ -29,7 +29,7 @@ int main(){
 //  Data processing
 	const int nassets{487};
 	const int nlines{756};
-	const double end_train{11};
+	const double end_train{600};
 	dataframe Data{756,nassets,"cleanIndex.csv"};
 	mat Train = Data.getData().rows(0,end_train+0);
 
@@ -41,7 +41,7 @@ int main(){
 	vector<int> layers{487,250,125,1};
 //	Net has only one vector of coefficients but several vecotrs of nodes values so that for
 //	each sample we have a Network
- 	Net N(layers,fs,ds,/* number of samples : */end_train-9,/*number of threads : */2);
+ 	Net N(layers,fs,ds,/* number of samples : */end_train-9,/*number of threads : */4);
 
 //	Network initialization
 	for(int d = 0 ; d != end_train+1-10 ; ++d){
@@ -54,14 +54,19 @@ int main(){
 		N.update(d); /* update for the network corresponding to sample d */
 
 	}
+//
+	dataframe init(N.getNcoeffs(),1,"Coeffs590assets_batchSize26_7.csv");
+	N.get_coeffs() = init.getData();
 
-	vec stats = opt::stochastic_descent(&N,/*learning rate*/1e-8,/*stoping condition*/0.01,/* batch size*/2,/*linear search enabled*/true,/*number of epochs*/10);
+	mat stats = opt::stochastic_descent(&N,/*learning rate*/1e-8,/*stoping condition*/0.01,/* batch size*/26,/*linear search enabled*/true,/*number of epochs*/1000,/* minlr*/1e-12);
+
 
 	opt::result(&N);
+	dataframe S{stats,vector<std::string>{"gradient norm","error"}};
+	S.write_csv("Stats590assets_batchSize26_8.csv");
 
-
-
-
+	dataframe coeffs{N.get_coeffs(),vector<std::string>{"coeffs"}};
+	coeffs.write_csv("Coeffs590assets_batchSize26_8.csv");
 
 
 
