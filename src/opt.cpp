@@ -11,7 +11,6 @@
 #include <algorithm> // std::random_shuffle
 
 
-
 using namespace std;
 using namespace arma;
 
@@ -183,13 +182,21 @@ double opt::err(Net * N){ /* similar as gradient function */
 	return sum(res)/nsamples;
 };
 
-void opt::result( Net* N) {
+void opt::result( Net* N, std::string str) {
 	const int nsamples =(*N).getNsamples();
 	const int nlayers =(*N).L().size();
+	mat res(nsamples,2,fill::zeros);
 		cout <<"prediction      target\n";
 	for(int sample = 0 ; sample != nsamples ; ++sample){
+		res(sample,0) = (*N).n(sample,nlayers-1,0);
+		res(sample,1) = (*N).getTarget(sample);
 		cout << (*N).n(sample,nlayers-1,0) << "         " <<(*N).getTarget(sample)<<'\n';
+
 	}
+		vSpace::dataframe d(res,vector<std::string>{"prediction","target"});
+		if( str != "None" ){
+			d.write_csv(str);
+		}
 		cout <<"\nerror "<< err(N);
 }
 

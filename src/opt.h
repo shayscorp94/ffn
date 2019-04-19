@@ -13,6 +13,7 @@
 #include "math.h"
 #include "Net.h"
 #include <algorithm> // std::random_shuffle
+#include "dataframe.h"
 
 
 
@@ -61,7 +62,7 @@ static void partial_err(double * res, Net * N,const int start,const int end,cons
 // computes error on all samples, will use parallelization (n threads specified in construction of Net)
 static double err( Net * N); /* Updates N before computing the error : useful for linear search */
 // displays the prevision versus target value
-static void result( Net * N);
+static void result( Net * N,std::string str = "None");
 
 // similar as grad_descent exept that we use a vec [0, ... , nsamples-1] that we permute at the begining of each epoch
 // to makes sure batches are made of shuffled samples
