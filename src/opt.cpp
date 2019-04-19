@@ -195,7 +195,7 @@ namespace net {
 		int size = nsamples / n_threads;
 		vec res(n_threads, fill::zeros);
 
-		for (int+=t = 0; t != n_threads - 1; ++t) {
+		for (int t = 0; t != n_threads - 1; ++t) {
 			start = end;
 			end += size;
 			trds[t] = thread{ partial_err,&(res(t)),N,start,end,t };
@@ -208,9 +208,9 @@ namespace net {
 			trds[t].join();
 		}
 		return sum(res) / nsamples;
-	};
+	}
 
-	void opt::result(Net* N) {
+	void opt::result(Net* N,std::string str) {
 		const int nsamples = (*N).getNsamples();
 		const int nlayers = (*N).L().size();
 		cout << "prediction      target\n";
@@ -220,7 +220,7 @@ namespace net {
 		cout << "\nerror " << err(N);
 	}
 
-	arma::vec opt::stochastic_descent(Net * N, const double & etha, const double & eps, const int batchSize, bool linSearch, const int & nepochs) {
+	arma::vec opt::stochastic_descent(Net * N, const double & etha, const double & eps, const int batchSize, bool linSearch, const int & nepochs,const double & minlr) {
 		//	cout << "opt::grad_descent"<<endl;
 		double eth = etha;
 		const int maxIt{ nepochs };
@@ -249,7 +249,6 @@ namespace net {
 		double min = -1;
 		double lin = 0.1;
 		double error = 0;
-		const double minlr = 1e-9;
 
 
 

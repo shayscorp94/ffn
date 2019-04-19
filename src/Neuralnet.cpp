@@ -77,13 +77,11 @@ int main(){
 //
 // 		}
 
-	dataframe init(N.getNcoeffs(),1,"Coeffs590assets_batchSize26_11.csv");
-	N.get_coeffs() = init.getData();
+//	dataframe init(N.getNcoeffs(),1,"Coeffs590assets_batchSize26_11.csv");
+//	N.get_coeffs() = init.getData();
 
-//	mat stats = opt::stochastic_descent(&N,/*learning rate*/1e-8,/*stoping condition*/0.01,/* batch size*/26,/*linear search enabled*/true,/*number of epochs*/1000,/* minlr*/1e-10);
+	opt::stochastic_descent(&N,/*learning rate*/1e-8,/*stoping condition*/0.01,/* batch size*/26,/*linear search enabled*/true,/*number of epochs*/1000,/* minlr*/1e-10);
 
-	opt::err(&N);
-	opt::result(&N,"resultTrainafter11.csv");
 //	dataframe S{stats,vector<std::string>{"gradient norm","error"}};
 //	S.write_csv("Stats590assets_batchSize26_11.csv");
 //

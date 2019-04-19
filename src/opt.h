@@ -66,7 +66,7 @@ static void result( Net * N,std::string str = "None");
 
 // similar as grad_descent exept that we use a vec [0, ... , nsamples-1] that we permute at the begining of each epoch
 // to makes sure batches are made of shuffled samples
-static arma::mat stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize=1, bool linSearch = true,const int & nepochs =100,const double & minlr = 1e-9);
+static arma::vec stochastic_descent(Net * N, const double & etha,const double & eps,const int batchSize=1, bool linSearch = true,const int & nepochs =100,const double & minlr = 1e-9);
 
 static void gradient_st( Net * N,std::vector<Net> * Gs,arma::vec * res_grad,arma::mat * thread_grads,const arma::vec * ,const int batchStart,const int batchEnd);
 
