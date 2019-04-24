@@ -56,7 +56,7 @@ int main() {
 	}
 	//
 	dataframe init(N.getNcoeffs(), 1, "Coeffs590assets_batchSize26_9.csv");
-	N.get_coeffs() = init.getData();
+	N.HeInit();
 
 	mat stats = opt::stochastic_descent(&N,/*learning rate*/1e-10,/*stoping condition*/0.01,/* batch size*/10,/*linear search enabled*/true,/*number of epochs*/1000,/* minlr*/1e-10);
 
