@@ -11,15 +11,12 @@
 #include <algorithm> // std::random_shuffle
 
 
-
 using namespace std;
 using namespace arma;
 
 namespace net {
 
 	void opt::grad(const Net & N, const int sample, Net & G, const double & target) {
-		//	cout << "opt::grad" << endl;
-
 
 		const vector<int> & layers = N.L();
 		const int n_layers = layers.size();
@@ -31,33 +28,16 @@ namespace net {
 
 		for (int l = n_layers - 2; l != -1; --l) {
 			//		Coeffs of G store partial diff with respect to that coeff
-
-			if (l == n_layers - 2) {
-				for (int start = 0; start != layers[l]; ++start) {
-					G.v(0, l, start) = 0;
-					for (int end = 0; end != layers[l + 1]; ++end) {
-						G.c(l, start, end) = N.v(sample, l, start)*G.v(0, l + 1, end);
-						G.v(0, l, start) += N.c(l, start, end)*deriv[l](N.v(sample, l, start))*G.v(0, l + 1, end); //try changing N.n to N.v and see if anything changes
-					}
-				}
-
-			}
-			else
-			{
-				int end = 0;
-				for (int start = 0; start != layers[l]; start = start + 2) {
+			for (int start = 0; start != layers[l]; ++start) {
+				for (int end = 0; end != layers[l + 1]; ++end) {
 					G.c(l, start, end) = N.v(sample, l, start)*G.v(0, l + 1, end);
-					G.c(l, (start + 1), end) = N.v(sample, l, (start + 1))*G.v(0, l + 1, end);
-					end++;
 				}
-
-				end = 0;
-				for (int start = 0; start != layers[l]; start = start + 2) {
-					//	G.v(l, start) = 0;
-					//	G.v(l, start + 1) = 0;
-					G.v(0, l, start) = N.c(l, start, end)*deriv[l](N.v(sample, l, start))*G.v(0, l + 1, end); //try changing N.n to N.v and see if anything changes
-					G.v(0, l, (start + 1)) = N.c(l, (start + 1), end)*deriv[l](N.v(sample, l, (start + 1)))*G.v(0, l + 1, end); //try changing N.n to N.v and see if anything changes
-					end++;
+			}
+			//		Nodes of G store partial diff with respect to that node value
+			for (int start = 0; start != layers[l]; ++start) {
+				G.v(0, l, start) = 0;
+				for (int end = 0; end != layers[l + 1]; ++end) {
+					G.v(0, l, start) += N.c(l, start, end)*deriv[l](N.n(sample, l, start))*G.v(0, l + 1, end);
 				}
 			}
 		}
@@ -202,12 +182,20 @@ namespace net {
 		return sum(res) / nsamples;
 	};
 
-	void opt::result(Net* N) {
+	void opt::result(Net* N, std::string str) {
 		const int nsamples = (*N).getNsamples();
 		const int nlayers = (*N).L().size();
+		mat res(nsamples, 2, fill::zeros);
 		cout << "prediction      target\n";
 		for (int sample = 0; sample != nsamples; ++sample) {
+			res(sample, 0) = (*N).n(sample, nlayers - 1, 0);
+			res(sample, 1) = (*N).getTarget(sample);
 			cout << (*N).n(sample, nlayers - 1, 0) << "         " << (*N).getTarget(sample) << '\n';
+
+		}
+		vSpace::dataframe d(res, vector<std::string>{"prediction", "target"});
+		if (str != "None") {
+			d.write_csv(str);
 		}
 		cout << "\nerror " << err(N);
 	}
@@ -241,6 +229,7 @@ namespace net {
 		double lin = 0.1;
 		double error = 0;
 		//	const double minlr = 1e-9;
+
 
 
 
@@ -330,6 +319,159 @@ namespace net {
 				linSearch = (eth > minlr) ? true : false;
 			}
 			(*N).get_coeffs() -= eth * g;
+			//		stats
+			stats(i, 0) = norm(g);
+			stats(i, 1) = err(N);
+
+			//		cout << norm(g)<<'\n';
+
+		}
+		finish = std::chrono::high_resolution_clock::now();
+		elapsed = finish - start;
+		vec end_stats(3);
+		end_stats(0) = elapsed.count();
+		end_stats(1) = norm(g);
+		end_stats(2) = err(N);
+
+		cout << "maxEpochs" << maxIt << " time" << end_stats(0) << "norm" << end_stats(1) << "err" << end_stats(2) << '\n';
+		return stats;
+	}
+
+	arma::mat opt::stochastic_descent_adam(Net * N, const double & etha, const double & eps, const int batchSize, bool linSearch, const int & nepochs, const double & minlr) {
+		/* one epochs corresponds to nsapmles/nbatches step. On step is : compute gradient of the batch , lin search , descend along the gradient */
+		double eth = etha;
+		const int maxIt{ nepochs };
+
+		const int nsamples = (*N).getNsamples();
+
+		//	for threads
+		int n_threads = (*N).getNthreads();
+		n_threads = (n_threads > batchSize) ? batchSize : n_threads; /* prevent from having more threads than samples */
+
+		vector<Net> Gs(n_threads, Net((*N).L(), (*N).getDs(), (*N).getDs(), 1));
+
+		mat thread_grads((*N).getNcoeffs(), n_threads, fill::zeros);
+
+		vec g((*N).getNcoeffs(), fill::zeros);
+
+		vec vdw((*N).getNcoeffs(), fill::zeros);
+		vec sdw((*N).getNcoeffs(), fill::zeros);
+		vec vdw_corr((*N).getNcoeffs(), fill::zeros);
+		vec sdw_corr((*N).getNcoeffs(), fill::zeros);
+
+
+		//	time measurement
+		auto start = std::chrono::high_resolution_clock::now();
+		auto finish = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double> elapsed;
+
+		//	for linsearch
+		double lmin = 0;
+		double min = -1;
+		double lin = 0.1;
+		double error = 0;
+		//	const double minlr = 1e-9;
+		double b1 = 0.9;
+		double b2 = 0.999;
+		double epsilon = 1e-8;
+
+
+
+		int batchStart = 0;
+		int batchEnd = 0;
+		//	Stats
+		mat stats(maxIt, 2, fill::zeros);
+
+		//	permutations
+		vec sigma(nsamples);
+		for (int i = 0; i != nsamples; ++i) {
+			sigma(i) = i;
+		}
+		//  before each epoch, permute the samples : sigma will be passed to gradient_st
+		//	actually we do no permute the samples we just use sigma wich indicates which indexes to use
+		for (int i = 0; i != maxIt; ++i) {
+			sigma = shuffle(sigma);
+
+			batchStart = 0;
+			batchEnd = 0;
+			for (int j = 0; j != nsamples / batchSize - 1; ++j) {
+				batchStart = batchEnd;
+				batchEnd += batchSize;
+
+				gradient_st(N, &Gs, &g, &thread_grads, &sigma, batchStart, batchEnd);
+
+				if (linSearch) {
+					lmin = 0;
+					min = -1;
+					lin = 0.1;
+					for (int j = 0; j != 3; ++j) {
+						(*N).get_coeffs() -= eth * lin*g;
+						error = err_st(N, &sigma, batchStart, batchEnd);
+						(*N).get_coeffs() += eth * lin*g;
+
+
+						if (min == -1 or min > error) {
+							min = error;
+							lmin = lin;
+						}
+						lin *= 10;
+					}
+					eth = lmin * eth;
+					//			If eth becomes too small we keep and and stop doing linear searches.
+					linSearch = (eth > minlr) ? true : false;
+				}
+				//			cout << i<<endl;
+				vdw = b1 * vdw + (1 - b1)*g;
+				sdw = b2 * sdw + (1 - b2)*square(g);
+				vdw_corr = vdw / (1 - pow(b1, (i + 1)));
+				sdw_corr = sdw / (1 - pow(b2, (i + 1)));
+				(*N).get_coeffs() -= eth * vdw_corr / (sqrt(sdw_corr + epsilon));
+
+
+			}
+			batchStart = batchEnd;
+			batchEnd = nsamples;
+
+			gradient_st(N, &Gs, &g, &thread_grads, &sigma, batchStart, batchEnd);
+			//		cout << norm(g)<<'\n';
+
+			if (norm(g) < eps) {
+				finish = std::chrono::high_resolution_clock::now();
+				elapsed = finish - start;
+				vec end_stats(3);
+				end_stats(0) = elapsed.count();
+				end_stats(1) = norm(g);
+				end_stats(2) = err(N);
+				cout << "numit" << i << " time" << end_stats(0) << "norm" << end_stats(1) << "err" << end_stats(2) << '\n';
+				return stats;
+			}
+			if (linSearch) {
+				lmin = 0;
+				min = -1;
+				lin = 0.1;
+				for (int j = 0; j != 3; ++j) {
+					(*N).get_coeffs() -= eth * lin*g;
+					error = err_st(N, &sigma, batchStart, batchEnd);
+					(*N).get_coeffs() += eth * lin*g;
+
+
+					if (min == -1 or min > error) {
+						min = error;
+						lmin = lin;
+					}
+					lin *= 10;
+				}
+				eth = lmin * eth;
+
+				//			If eth becomes too small we keep and and stop doing linear searches.
+				linSearch = (eth > minlr) ? true : false;
+			}
+			vdw = b1 * vdw + (1 - b1)*g;
+			sdw = b2 * sdw + (1 - b2)*square(g);
+			vdw_corr = vdw / (1 - pow(b1, (i + 1)));
+			sdw_corr = sdw / (1 - pow(b2, (i + 1)));
+			(*N).get_coeffs() -= eth * vdw_corr / (sqrt(sdw_corr + epsilon));
+
 			//		stats
 			stats(i, 0) = norm(g);
 			stats(i, 1) = err(N);
